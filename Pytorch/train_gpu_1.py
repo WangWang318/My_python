@@ -1,10 +1,36 @@
+"""
+    网络模型
+    数据(输入、标注)
+    损失函数
+    cuda()
+"""
+
 import torch
 import torchvision.datasets
 from torch.utils.data import DataLoader
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
-from mymodel import MyNet
+
+class MyNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model1 = nn.Sequential(
+            nn.Conv2d(3, 32, 5, padding=2),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 32, 5, padding=2),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 5, padding=2),
+            nn.MaxPool2d(2),
+            nn.Flatten(),
+            nn.Linear(1024, 64),
+            nn.Linear(64, 10)
+        )
+
+    def forward(self, x):
+        x = self.model1(x)
+        return x
+
 
 train_data = torchvision.datasets.CIFAR10("./dataset", train=True, transform=torchvision.transforms.ToTensor(), download=True)
 test_data = torchvision.datasets.CIFAR10("./dataset", train=False, transform=torchvision.transforms.ToTensor(), download=True)
@@ -24,9 +50,14 @@ writer = SummaryWriter("./logs_train") # tensorboard --logdir=Pytorch//logs_trai
 
 # 创建网络模型
 net = MyNet()
+if torch.cuda.is_available():
+    net = net.cuda()
+    print("cuda")
 
 # 损失函数
 loss_fn = nn.CrossEntropyLoss()
+if torch.cuda.is_available():
+    loss_fn = loss_fn.cuda()
 
 # 优化器
 learning_rate = 1e-2
@@ -47,6 +78,10 @@ for i in range(10):
     net.train()
     for data in train_dataloader:
         images, targets = data
+        if torch.cuda.is_available():
+            images = images.cuda()
+            targets = targets.cuda()
+
         outputs = net(images)
         loss = loss_fn(outputs, targets)
 
@@ -68,6 +103,10 @@ for i in range(10):
     with torch.no_grad():
         for data in test_dataloader:
             images, targets = data
+            if torch.cuda.is_available():
+                images = images.cuda()
+                targets = targets.cuda()
+
             outputs = net(images)
             loss = loss_fn(outputs, targets)
             total_test_loss += loss
@@ -85,3 +124,4 @@ for i in range(10):
     print("模型已保存")
 
 writer.close()
+
