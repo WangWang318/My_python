@@ -1,10 +1,36 @@
+"""
+    网络模型
+    数据(输入、标注)
+    损失函数
+    cuda()
+"""
+
 import torch
 import torchvision.datasets
 from torch.utils.data import DataLoader
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
-from mymodel import MyNet
+
+class MyNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model1 = nn.Sequential(
+            nn.Conv2d(3, 32, 5, padding=2),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 32, 5, padding=2),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 5, padding=2),
+            nn.MaxPool2d(2),
+            nn.Flatten(),
+            nn.Linear(1024, 64),
+            nn.Linear(64, 10)
+        )
+
+    def forward(self, x):
+        x = self.model1(x)
+        return x
+
 
 train_data = torchvision.datasets.CIFAR10("./dataset", train=True, transform=torchvision.transforms.ToTensor(), download=True)
 test_data = torchvision.datasets.CIFAR10("./dataset", train=False, transform=torchvision.transforms.ToTensor(), download=True)
@@ -19,14 +45,19 @@ print(train_data[0][0].shape)
 train_dataloader = DataLoader(train_data, batch_size=256)
 test_dataloader = DataLoader(test_data, batch_size=256)
 
+# 定义训练的设备
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # 添加tensorboard
 writer = SummaryWriter("./logs_train") # tensorboard --logdir=Pytorch//logs_train
 
 # 创建网络模型
-net = MyNet()
+net = torch.load("net_50.pth")
+net = net.to(device)
 
 # 损失函数
 loss_fn = nn.CrossEntropyLoss()
+loss_fn = loss_fn.to(device)
 
 # 优化器
 learning_rate = 1e-2
@@ -40,13 +71,16 @@ total_test_step = 0
 # 训练的轮数
 epoch = 0
 
-for i in range(30):
+for i in range(201):
     print(f'-------------第{i + 1}轮训练-------------')
 
     # 训练开始
     net.train()
     for data in train_dataloader:
         images, targets = data
+        images = images.to(device)
+        targets = targets.to(device)
+
         outputs = net(images)
         loss = loss_fn(outputs, targets)
 
@@ -68,6 +102,9 @@ for i in range(30):
     with torch.no_grad():
         for data in test_dataloader:
             images, targets = data
+            images = images.to(device)
+            targets = targets.to(device)
+
             outputs = net(images)
             loss = loss_fn(outputs, targets)
             total_test_loss += loss
@@ -80,8 +117,9 @@ for i in range(30):
     writer.add_scalar("test_loss", total_test_loss, total_test_step)
     writer.add_scalar("test_accuracy", total_accuracy / test_data_size, total_test_step)
     total_test_step += 1
-    if i % 5 == 0:
-        torch.save(net, f"net_{i}.pth")
+    if i % 10 == 0:
+        torch.save(net, f"my_model/net_{i}.pth")
         print("模型已保存")
 
 writer.close()
+
